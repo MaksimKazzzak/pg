@@ -4,32 +4,48 @@ import requests
 
 def download_url_and_get_all_hrefs(url):
     """
-    Funkce stahne url predanou v parametru url pomoci volani response = requests.get(),
-    zkontroluje navratovy kod response.status_code, ktery musi byt 200,
-    pokud ano, najdete ve stazenem obsahu stranky response.content vsechny vyskyty
-    <a href="url">odkaz</a> a z nich nactete url, ktere vratite jako seznam pomoci return
+    Funkce stáhne html stránku a vrátí seznam všech odkazů.
+    Odkazy mohou být v tagu <a> v libovolném pořadí atributů.
     """
-    responses = requests.get(url)
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise Exception(f"Download of {url} failed with status code {response.status_code}")
+
+    html = response.content.decode("utf-8", errors="ignore")
     hrefs = []
-    if responses.status_code == 200:
-        # succesfully donwloaded html
-        html_text = responses.content.decode('utf-8').split('\n')
-        # nakrajene na liny
-        for line in html_text:
-            if '<a href="' in line:
-                href = line.split('"')[1]
-                if href.startswith('http'):
-                    hrefs.append(href)
-    else:
-        raise Exception(f'Dowload of {url} failed with status code {responses.status_code}')
+
+    # pro jednoduchost rozdělíme html na kousky po "<a"
+    parts = html.split("<a")
+
+    for part in parts[1:]:
+        # najdeme pozici atributu href=
+        pos = part.find("href=")
+        if pos == -1:
+            continue
+
+        # začátek hodnoty href
+        start = part.find('"', pos)
+        end = part.find('"', start + 1)
+
+        # pokud není v uvozovkách, zkusíme apostrofy
+        if start == -1 or end == -1:
+            start = part.find("'", pos)
+            end = part.find("'", start + 1)
+
+        if start == -1 or end == -1:
+            continue
+
+        link = part[start + 1:end]
+
+        if link.startswith("http"):
+            hrefs.append(link)
+
     return hrefs
 
 
 if __name__ == "__main__":
-    #For test only
-    #url = 'https://www.jcu.cz/cz/prijimaci-zkousky/prijimaci-rizeni'
     try:
-        # osetrete potencialni chyby pomoci vetve except
         url = sys.argv[1]
         print(download_url_and_get_all_hrefs(url))
     except IndexError:
