@@ -3,30 +3,19 @@ from abc import ABC, abstractmethod
 
 class Piece(ABC):
     def __init__(self, color, position):
-        """
-        Inicializuje šachovou figurku.
-        
-        :param color: Barva figurky ('white' nebo 'black').
-        :param position: Aktuální pozice na šachovnici jako tuple (row, col).
-        """
+        # barva figurky ('white' nebo 'black')
         self.__color = color
+        # pozice figurky na šachovnici (řádek, sloupec)
         self.__position = position
 
     @abstractmethod
     def possible_moves(self):
-        """
-        Vrací všechny možné pohyby figurky.
-        Musí být implementováno v podtřídách.
-
-        :return: Seznam možných pozic [(row, col), ...].
-        """
+        # každá figurka musí implementovat vlastní pohyby
         pass
-
-    def check_moves(self, moves):
-        return [move for move in moves if self.is_position_on_board(move)]
 
     @staticmethod
     def is_position_on_board(position):
+        # kontrola, zda je pozice na šachovnici
         return 1 <= position[0] <= 8 and 1 <= position[1] <= 8
 
     @property
@@ -38,8 +27,8 @@ class Piece(ABC):
         return self.__position
 
     @position.setter
-    def position(self, new_postion):
-        self.__position = new_postion
+    def position(self, new_position):
+        self.__position = new_position
 
     def __str__(self):
         return f'Piece({self.color}) at position {self.position}'
@@ -47,14 +36,18 @@ class Piece(ABC):
 
 class Pawn(Piece):
     def possible_moves(self):
-        moves = []
+        # pěšák postupuje pouze vpřed
         row, col = self.position
-        if self.color == 'white':
-            new_pos = (row + 1, col)
-        else:  # black
-            new_pos = (row - 1, col)
+        moves = []
+
+        # bílý → řádek +1, černý → řádek -1
+        step = 1 if self.color == "white" else -1
+        new_pos = (row + step, col)
+
+        # pěšák nebere diagonálně, uvažujeme jen volný tah dopředu
         if self.is_position_on_board(new_pos):
             moves.append(new_pos)
+
         return moves
 
     def __str__(self):
@@ -64,15 +57,17 @@ class Pawn(Piece):
 class Knight(Piece):
     def possible_moves(self):
         row, col = self.position
+
+        # L-tahy jezdce (8 možností)
         moves = [
             (row + 2, col + 1), (row + 2, col - 1),
             (row - 2, col + 1), (row - 2, col - 1),
             (row + 1, col + 2), (row + 1, col - 2),
             (row - 1, col + 2), (row - 1, col - 2)
         ]
-        # Filtruje tahy, které jsou mimo šachovnici
-        final_moves = self.check_moves(moves)
-        return final_moves
+
+        # přidáme pouze ty tahy, které jsou na šachovnici
+        return [m for m in moves if self.is_position_on_board(m)]
 
     def __str__(self):
         return f'Knight({self.color}) at position {self.position}'
@@ -80,18 +75,24 @@ class Knight(Piece):
 
 class Bishop(Piece):
     def possible_moves(self):
+        # střelec → pohyb pouze diagonálně, libovolný počet polí
         row, col = self.position
         moves = []
+
+        # 4 diagonální směry
         directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+
         for dr, dc in directions:
-            for i in range(1, 8):
-                new_row = row + dr * i
-                new_col = col + dc * i
-                new_position = (new_row, new_col)
-                if self.is_position_on_board(new_position):
-                    moves.append(new_position)
+            for i in range(1, 8):  # maximálně 7 polí
+                new_pos = (row + dr * i, col + dc * i)
+
+                if self.is_position_on_board(new_pos):
+                    moves.append(new_pos)
                 else:
+                    # zastavíme směr, pokud bychom vyšli mimo desku
                     break
+
+        return moves  # ← opraveno, dříve chybělo (způsobovalo NoneType chybu)
 
     def __str__(self):
         return f'Bishop({self.color}) at position {self.position}'
@@ -99,24 +100,28 @@ class Bishop(Piece):
 
 class Rook(Piece):
     def possible_moves(self):
+        # věž → pohybuje se pouze rovně (vertikálně, horizontálně)
         row, col = self.position
         moves = []
+
+        # vertikální směry
         for i in range(1, 8):
-            # upward
             if self.is_position_on_board((row + i, col)):
                 moves.append((row + i, col))
-            # backward
             if self.is_position_on_board((row - i, col)):
                 moves.append((row - i, col))
 
+        # horizontální směry
         for i in range(1, 8):
-            # Right
             if self.is_position_on_board((row, col + i)):
                 moves.append((row, col + i))
-            # Left
             if self.is_position_on_board((row, col - i)):
                 moves.append((row, col - i))
-            return moves
+
+        # ← return musí být AŽ zde, ne uvnitř cyklu!
+        # U tebe byl v původním kódu ve smyčce, což způsobilo,
+        # že věž vrátila jen 1 krok doleva a doprava.
+        return moves
 
     def __str__(self):
         return f'Rook({self.color}) at position {self.position}'
@@ -124,24 +129,24 @@ class Rook(Piece):
 
 class Queen(Piece):
     def possible_moves(self):
-        row, col = self.position  # Současná pozice královny
+        # dáma = kombinace věže + střelce
+        row, col = self.position
         moves = []
-        # Seznam všech směrů (včetně diagonál, vertikál a horizontál)
-        directions = [
-            (1, 0), (-1, 0), (0, 1), (0, -1),  # Vertikální a horizontální směr
-            (1, 1), (1, -1), (-1, 1), (-1, -1)  # Diagonální směry
-        ]
-       # Generování pohybů pro každý směr
-        for dr, dc in directions:
-            for i in range(1, 8):  # Maximální počet buněk
-                new_row = row + dr * i
-                new_col = col + dc * i
-                new_position = (new_row, new_col)
 
-                if self.is_position_on_board(new_position):  # Kontrola hranic desky
-                    moves.append(new_position)
+        # všech 8 směrů
+        directions = [
+            (1, 0), (-1, 0), (0, 1), (0, -1),      # věžové směry
+            (1, 1), (1, -1), (-1, 1), (-1, -1)     # diagonály
+        ]
+
+        for dr, dc in directions:
+            for i in range(1, 8):
+                new_pos = (row + dr * i, col + dc * i)
+                if self.is_position_on_board(new_pos):
+                    moves.append(new_pos)
                 else:
-                    break  # Přerušte smyčku, pokud překročíme hrací plochu
+                    break
+
         return moves
 
     def __str__(self):
@@ -149,25 +154,26 @@ class Queen(Piece):
 
 
 class King(Piece):
-   # Téměř jako královna, ale bez nutnosti opakovat celé pole.
     def possible_moves(self):
+        # král → jeden krok do všech směrů
         row, col = self.position
         moves = []
+
         directions = [
-            (1, 0), (-1, 0), (0, 1), (0, -1),  # Vertikální a horizontální směr
-            (1, 1), (1, -1), (-1, 1), (-1, -1)  # Diagonální směry
+            (1, 0), (-1, 0), (0, 1), (0, -1),
+            (1, 1), (1, -1), (-1, 1), (-1, -1)
         ]
+
         for dr, dc in directions:
             new_pos = (row + dr, col + dc)
             if self.is_position_on_board(new_pos):
                 moves.append(new_pos)
+
         return moves
 
     def __str__(self):
         return f'King({self.color}) at position {self.position}'
 
-
-if __name__ == "__main__":
     piece = Rook("white", (5, 5))
     print(piece)
     print(piece.possible_moves())
